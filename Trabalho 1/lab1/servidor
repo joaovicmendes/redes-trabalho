@@ -37,6 +37,9 @@ def dados_recebidos(conexao, dados):
         if dados.startswith(b'NICK'):
             comando_nick(conexao, dados)
 
+        if dados.startswith(b'PRIVMSG'):
+            comando_privmsg(conexao, dados)
+
     # Interpretando comandos
     if dados == b'':
         return sair(conexao)
@@ -103,6 +106,21 @@ def comando_nick(conexao, dados):
             resposta = b':server 432 ' + conexao.apelido + b' ' + apelido + b' :Erroneous nickname' + _DELIM
             conexao.enviar(resposta)
 
+def comando_privmsg(conexao, dados):
+    # Recortando os dados recebidos
+    try:
+        _, destinatario, conteudo = dados.strip(_DELIM).split(b' ', 2)
+        conteudo = conteudo[1:]
+    except IndexError:
+        destinatario = b''
+        conteudo = b''
+
+    if destinatario.lower() not in name_conn_map:
+        return
+
+    conexao_destino = name_conn_map[ destinatario.lower() ]
+    resposta = b':' + conexao.apelido + b' PRIVMSG ' + destinatario + b' :' + conteudo + _DELIM
+    conexao_destino.enviar(resposta)
 
 servidor = Servidor(6667)
 servidor.registrar_monitor_de_conexoes_aceitas(conexao_aceita)
