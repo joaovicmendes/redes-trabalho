@@ -5,12 +5,15 @@ import re
 
 _DELIM = b'\r\n'
 
+name_conn_map = {}
+
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
 
 
 def sair(conexao):
     print(conexao, 'conexão fechada')
+    del name_conn_map[ conexao.apelido.lower() ]
     conexao.fechar()
 
 
@@ -31,6 +34,9 @@ def dados_recebidos(conexao, dados):
         if dados.startswith(b'PING'):
             comando_ping(conexao, dados)
 
+        if dados.startswith(b'NICK'):
+            comando_nick(conexao, dados)
+
     # Interpretando comandos
     if dados == b'':
         return sair(conexao)
@@ -41,7 +47,10 @@ def dados_recebidos(conexao, dados):
 def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
     conexao.registrar_recebedor(dados_recebidos)
+
+    # Registrando dados vazios
     conexao.dados_residuais = b''
+    conexao.apelido = b'*'
 
 
 def comando_ping(conexao, dados):
@@ -51,6 +60,48 @@ def comando_ping(conexao, dados):
     except IndexError:
         resposta += b''
     conexao.enviar(resposta)
+
+
+def comando_nick(conexao, dados):
+    # Recortando os dados recebidos
+    try:
+        apelido = dados.split(b' ', 1)[1].split(_DELIM)[0]
+    except IndexError:
+        apelido = b''
+
+    # Verificando se nome já existe
+    if apelido.lower() in name_conn_map:
+        resposta = b':server 433 ' + conexao.apelido + b' ' + apelido + b' :Nickname is already in use' + _DELIM
+        conexao.enviar(resposta)
+        return
+
+    # Se for o primeiro apelido
+    if (conexao.apelido == b'*'):
+        if validar_nome(apelido):
+            # Adicionando apelido no mapeamento do servidor
+            name_conn_map[ apelido.lower() ] = conexao
+            conexao.apelido = apelido
+
+            resposta = b':server 001 ' + apelido + b' :Welcome' + _DELIM
+            conexao.enviar(resposta)
+            resposta = b':server 422 ' + apelido + b' :MOTD File is missing' + _DELIM
+            conexao.enviar(resposta)
+        else:
+            resposta = b':server 432 ' + b'* ' + apelido + b' :Erroneous nickname' + _DELIM
+            conexao.enviar(resposta)
+    # Se for trocar o apelido
+    else:
+        if validar_nome(apelido):
+            # Removendo apelido antigo e adicionando novo no mapeamento do servidor
+            del name_conn_map[ conexao.apelido.lower() ]
+            name_conn_map[ apelido.lower() ] = conexao
+
+            resposta = b':' + conexao.apelido + b' NICK ' + apelido + _DELIM
+            conexao.apelido = apelido
+            conexao.enviar(resposta)
+        else:
+            resposta = b':server 432 ' + conexao.apelido + b' ' + apelido + b' :Erroneous nickname' + _DELIM
+            conexao.enviar(resposta)
 
 
 servidor = Servidor(6667)
