@@ -13,14 +13,14 @@ class Canal:
         self.lista_membros = {}
         self.nome = nome
 
-    def adiciona_membro(self, conexao):
+    def join_membro(self, conexao):
         self.lista_membros[ conexao.apelido.lower() ] = conexao
         for membro in self.lista_membros:
             conn = self.lista_membros[membro]
             resposta = b':' + conexao.apelido + b' JOIN :' + self.nome + _DELIM
             conn.enviar(resposta)
 
-    def remove_membro(self, conexao):
+    def part_membro(self, conexao):
         for membro in self.lista_membros:
             conn = self.lista_membros[membro]
             resposta = b':' + conexao.apelido + b' PART ' + self.nome + _DELIM
@@ -29,9 +29,12 @@ class Canal:
 
         del self.lista_membros[ conexao.apelido.lower() ]
 
-    def troca_apelido_membro(self, conexao, nome_antigo):
-        del self.lista_membros[ nome_antigo.lower() ]
-        self.lista_membros[ conexao.apelido.lower() ] = conexao
+    def remove_membro(self, conexao):
+        del self.lista_membros[ conexao.apelido.lower() ]
+
+    def troca_apelido_membro(self, conexao, novo):
+        del self.lista_membros[ conexao.apelido.lower() ]
+        self.lista_membros[ novo.lower() ] = conexao
 
     def enviar(self, mensagem):
         remetente, _ = mensagem.split(b' ', 1)
@@ -48,7 +51,25 @@ def validar_nome(nome):
 
 def sair(conexao):
     print(conexao, 'conexão fechada')
-    del name_conn_map[ conexao.apelido.lower() ]
+
+    # Comunicando membros da conexão encerrada
+    membros = {}
+    resposta = b':' + conexao.apelido + b' QUIT :Connection closed' + _DELIM
+
+    # Remove de cada canal e adiciona os membros desse para a lista
+    for canal in conexao.canais:
+        canal.remove_membro(conexao)
+        for membro in canal.lista_membros:
+            membros[membro] = canal.lista_membros[membro]
+
+    for membro in membros:
+        conn = membros[membro]
+        conn.enviar(resposta)
+
+    # Removendo o apelido dos registrados no servidor
+    if conexao.apelido != b'*':
+        del name_conn_map[ conexao.apelido.lower() ]
+
     conexao.fechar()
 
 
@@ -95,6 +116,7 @@ def conexao_aceita(conexao):
     # Registrando dados vazios
     conexao.dados_residuais = b''
     conexao.apelido = b'*'
+    conexao.canais = []
 
 
 def comando_ping(conexao, dados):
@@ -140,6 +162,10 @@ def comando_nick(conexao, dados):
             del name_conn_map[ conexao.apelido.lower() ]
             name_conn_map[ apelido.lower() ] = conexao
 
+            # Atualizando apelido nos canais que participa
+            for canal in conexao.canais:
+                canal.troca_apelido_membro(conexao, apelido)
+
             resposta = b':' + conexao.apelido + b' NICK ' + apelido + _DELIM
             conexao.apelido = apelido
             conexao.enviar(resposta)
@@ -178,7 +204,8 @@ def comando_join(conexao, dados):
     else:
         canal = name_conn_map[ nome_canal.lower() ]
 
-    canal.adiciona_membro(conexao)
+    conexao.canais.append(canal)
+    canal.join_membro(conexao)
 
 
 def comando_part(conexao, dados):
@@ -202,7 +229,8 @@ def comando_part(conexao, dados):
     else:
         canal = name_conn_map[ nome_canal.lower() ]
 
-    canal.remove_membro(conexao)
+    conexao.canais.remove(canal)
+    canal.part_membro(conexao)
 
 
 servidor = Servidor(6667)
