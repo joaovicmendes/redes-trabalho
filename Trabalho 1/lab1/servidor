@@ -3,6 +3,7 @@ import asyncio
 from tcp import Servidor
 import re
 
+_DELIM = b'\r\n'
 
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
@@ -14,14 +15,42 @@ def sair(conexao):
 
 
 def dados_recebidos(conexao, dados):
+    # Caso parte do comando tenha vindo antes
+    conexao.dados_residuais = conexao.dados_residuais + dados
+
+    # Enquanto tiver um comando completo nos dados residuais
+    while conexao.dados_residuais.find(_DELIM) != -1:
+        # Recortando o primeiro comando completo existente
+        dados, _, conexao.dados_residuais = conexao.dados_residuais.partition(_DELIM)
+        dados += _
+
+        # Interpretando comandos
+        if dados == b'':
+            return sair(conexao)
+
+        if dados.startswith(b'PING'):
+            comando_ping(conexao, dados)
+
+    # Interpretando comandos
     if dados == b'':
         return sair(conexao)
+
     print(conexao, dados)
 
 
 def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
     conexao.registrar_recebedor(dados_recebidos)
+    conexao.dados_residuais = b''
+
+
+def comando_ping(conexao, dados):
+    resposta = b':server PONG server :'
+    try:
+        resposta += dados.split(b' ', 1)[1]
+    except IndexError:
+        resposta += b''
+    conexao.enviar(resposta)
 
 
 servidor = Servidor(6667)
