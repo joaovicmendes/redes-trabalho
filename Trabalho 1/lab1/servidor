@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+
+# Universidade Federal de São Carlos – UFSCar
+# Departamento de Computação
+# 1001504 - Redes de Computadores – Trabalho 1
+# Prof. Dr. Paulo Matias
+# Aluno: João Victor Mendes Freire
+# RA: 758943
+
 import asyncio
 from tcp import Servidor
 import re
@@ -14,18 +22,38 @@ class Canal:
         self.nome = nome
 
     def join_membro(self, conexao):
+        # Colocando na lista de membros e enviando mensagem no canal
         self.lista_membros[ conexao.apelido.lower() ] = conexao
         for membro in self.lista_membros:
             conn = self.lista_membros[membro]
             resposta = b':' + conexao.apelido + b' JOIN :' + self.nome + _DELIM
             conn.enviar(resposta)
 
+        # Enviando lista de usuários para membro que acabou de chegar
+        membros = sorted(list(self.lista_membros))
+        base = b':server 353 ' + conexao.apelido + b' = ' + self.nome + b' :'
+        mensagem = base
+
+        # Recortando para manter cada mensagem em no máximo 512 bytes
+        mensagem += membros[0]
+        for i in range(1, len(membros)):
+            membro = membros[i]
+            if len(mensagem + membro + b' ' + _DELIM) < 512:
+                mensagem += b' ' + membro
+            else:
+                conexao.enviar(mensagem + _DELIM)
+                mensagem = base + b' ' + membro
+
+        conexao.enviar(mensagem + _DELIM)
+        mensagem = b':server 366 ' + conexao.apelido + b' ' + self.nome + b' :End of /NAMES list.'
+        conexao.enviar(mensagem + _DELIM)
+
+
     def part_membro(self, conexao):
         for membro in self.lista_membros:
             conn = self.lista_membros[membro]
             resposta = b':' + conexao.apelido + b' PART ' + self.nome + _DELIM
             conn.enviar(resposta)
-            print(resposta)
 
         del self.lista_membros[ conexao.apelido.lower() ]
 
