@@ -14,7 +14,6 @@ import re
 _DELIM = b'\r\n'
 
 name_conn_map = {}
-canais_map = {}
 
 class Canal:
     def __init__(self, nome):
