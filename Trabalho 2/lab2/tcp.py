@@ -1,6 +1,6 @@
 import asyncio
 from tcputils import *
-
+from random import randint
 
 class Servidor:
     def __init__(self, rede, porta):
@@ -33,10 +33,25 @@ class Servidor:
 
         if (flags & FLAGS_SYN) == FLAGS_SYN:
             # A flag SYN estar setada significa que é um cliente tentando estabelecer uma conexão nova
-            # TODO: talvez você precise passar mais coisas para o construtor de conexão
             conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao)
-            # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você acha melhor
-            # fazer aqui mesmo ou dentro da classe Conexao.
+            
+            # Gerando número de sequência aleatório e definindo ACK_NO
+            server_seq_no = randint(0, 0xffff)
+            ack_no = seq_no + 1
+
+            # Criando flags
+            flags = flags & 0
+            flags = flags | (FLAGS_SYN | FLAGS_ACK)
+
+            # Invertento endereço de origem e de destino
+            src_port, dst_port = dst_port, src_port
+            src_addr, dst_addr = dst_addr, src_addr
+
+            # Construindo cabeçalho com flags SYN e ACK
+            segmento = make_header(src_port, dst_port, server_seq_no, ack_no, flags)
+            segmento_checksum_corrigido = fix_checksum(segmento, src_addr, dst_addr)
+            self.rede.enviar(segmento_checksum_corrigido, dst_addr)
+
             if self.callback:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
