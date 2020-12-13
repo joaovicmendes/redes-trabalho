@@ -38,7 +38,6 @@ class Servidor:
             # Gerando número de sequência aleatório e definindo ACK_NO
             conexao.seq_no = randint(0, 0xffff)
             conexao.ack_no = seq_no + 1
-            conexao.seq_no_esperado = seq_no + 1
 
             # Criando flags
             flags = flags & 0
@@ -69,7 +68,6 @@ class Conexao:
         self.id_conexao = id_conexao
         self.seq_no = None
         self.ack_no = None
-        self.seq_no_esperado = None
         self.callback = None
         self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
@@ -81,12 +79,11 @@ class Conexao:
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         print('recebido payload: %r' % payload)
 
-        if seq_no != self.seq_no_esperado:
+        if seq_no != self.ack_no:
             return
         else:
             self.callback(self, payload)
 
-        self.seq_no_esperado = seq_no + len(payload)
         self.ack_no += len(payload)
 
         # Construindo e enviando pacote ACK
