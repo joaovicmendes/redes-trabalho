@@ -52,6 +52,9 @@ class Servidor:
             segmento_checksum_corrigido = fix_checksum(segmento, src_addr, dst_addr)
             self.rede.enviar(segmento_checksum_corrigido, dst_addr)
 
+            # Incrementando seq_no para considerar o SYN enviado
+            conexao.seq_no += 1
+
             if self.callback:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
@@ -108,10 +111,25 @@ class Conexao:
         """
         Usado pela camada de aplicação para enviar dados
         """
-        # TODO: implemente aqui o envio de dados.
-        # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
-        # que você construir para a camada de rede.
-        pass
+        self.servidor.rede.fila.clear()
+
+        # Construindo e enviando pacotes
+        dst_addr, dst_port, src_addr, src_port = self.id_conexao
+
+        flags = 0 | FLAGS_ACK
+
+        for i in range( int(len(dados)/MSS) ):
+            ini = i*MSS
+            fim = min(len(dados), (i+1)*MSS)
+
+            payload = dados[ini:fim]
+
+            segmento = make_header(src_port, dst_port, self.seq_no, self.ack_no, flags)
+            segmento_checksum_corrigido = fix_checksum(segmento+payload, src_addr, dst_addr)
+            self.servidor.rede.enviar(segmento_checksum_corrigido, dst_addr)
+
+            # Atualizando seq_no com os dados recém enviados
+            self.seq_no += len(payload)
 
     def fechar(self):
         """
