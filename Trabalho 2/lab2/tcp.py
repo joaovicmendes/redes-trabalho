@@ -64,6 +64,9 @@ class Servidor:
             print('%s:%d -> %s:%d (pacote associado a conexão desconhecida)' %
                   (src_addr, src_port, dst_addr, dst_port))
 
+    def _fechar_conexao(self, id_conexao):
+        if id_conexao in self.conexoes:
+            del self.conexoes[id_conexao]
 
 class Conexao:
     def __init__(self, servidor, id_conexao):
@@ -82,11 +85,16 @@ class Conexao:
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         print('recebido payload: %r' % payload)
 
+        # Verificando se o pacote não é duplicado ou está fora de ordem
         if seq_no != self.ack_no:
             return
-        else:
-            self.callback(self, payload)
 
+        # Se for um pedido de encerrar a conexão
+        if (flags & FLAGS_FIN) == FLAGS_FIN:
+            payload = b''
+            self.ack_no += 1
+
+        self.callback(self, payload)
         self.ack_no += len(payload)
 
         # Construindo e enviando pacote ACK
@@ -135,5 +143,11 @@ class Conexao:
         """
         Usado pela camada de aplicação para fechar a conexão
         """
-        # TODO: implemente aqui o fechamento de conexão
-        pass
+        # Construindo e enviando pacote FYN
+        dst_addr, dst_port, src_addr, src_port = self.id_conexao
+
+        segmento = make_header(src_port, dst_port, self.seq_no, self.ack_no, FLAGS_FIN)
+        segmento_checksum_corrigido = fix_checksum(segmento, src_addr, dst_addr)
+
+        self.servidor.rede.enviar(segmento_checksum_corrigido, dst_addr)
+        self.servidor._fechar_conexao(self.id_conexao)
