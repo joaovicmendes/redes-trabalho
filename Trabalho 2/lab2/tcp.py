@@ -54,6 +54,7 @@ class Servidor:
 
             # Incrementando seq_no para considerar o SYN enviado
             conexao.seq_no += 1
+            conexao.seq_no_base = conexao.seq_no
 
             if self.callback:
                 self.callback(conexao)
@@ -75,12 +76,17 @@ class Conexao:
         self.seq_no = None
         self.ack_no = None
         self.callback = None
-        self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
-        #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
+        self.timer = None
+        self.seq_no_base = None
+        self.pacotes_sem_ack = []
 
-    def _exemplo_timer(self):
-        # Esta função é só um exemplo e pode ser removida
-        print('Este é um exemplo de como fazer um timer')
+
+    def _timer(self):
+        if self.pacotes_sem_ack:
+            segmento, _, dst_addr = self.pacotes_sem_ack[0]
+            # Reenviando pacote
+            self.servidor.rede.enviar(segmento, dst_addr)
+
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         print('recebido payload: %r' % payload)
@@ -89,10 +95,22 @@ class Conexao:
         if seq_no != self.ack_no:
             return
 
+        # Se for um ACK, é preciso encerrar o timer e remover da lista de pacotes
+        # que precisam ser confirmados
+        if (flags & FLAGS_ACK) == FLAGS_ACK and ack_no > self.seq_no_base:
+            self.seq_no_base = ack_no
+            if self.pacotes_sem_ack:
+                self.timer.cancel()
+                self.pacotes_sem_ack.pop(0)
+                if self.pacotes_sem_ack:
+                    self.timer = asyncio.get_event_loop().call_later(1, self._timer)
+
         # Se for um pedido de encerrar a conexão
         if (flags & FLAGS_FIN) == FLAGS_FIN:
             payload = b''
             self.ack_no += 1
+        elif len(payload) <= 0:
+            return
 
         self.callback(self, payload)
         self.ack_no += len(payload)
@@ -100,7 +118,7 @@ class Conexao:
         # Construindo e enviando pacote ACK
         dst_addr, dst_port, src_addr, src_port = self.id_conexao
 
-        segmento = make_header(src_port, dst_port, self.seq_no, self.ack_no, flags)
+        segmento = make_header(src_port, dst_port, self.seq_no_base, self.ack_no, FLAGS_ACK)
         segmento_checksum_corrigido = fix_checksum(segmento, src_addr, dst_addr)
 
         self.servidor.rede.enviar(segmento_checksum_corrigido, dst_addr)
@@ -119,8 +137,6 @@ class Conexao:
         """
         Usado pela camada de aplicação para enviar dados
         """
-        self.servidor.rede.fila.clear()
-
         # Construindo e enviando pacotes
         dst_addr, dst_port, src_addr, src_port = self.id_conexao
 
@@ -135,6 +151,9 @@ class Conexao:
             segmento = make_header(src_port, dst_port, self.seq_no, self.ack_no, flags)
             segmento_checksum_corrigido = fix_checksum(segmento+payload, src_addr, dst_addr)
             self.servidor.rede.enviar(segmento_checksum_corrigido, dst_addr)
+
+            self.timer = asyncio.get_event_loop().call_later(1, self._timer)
+            self.pacotes_sem_ack.append( (segmento_checksum_corrigido, len(payload), dst_addr) )
 
             # Atualizando seq_no com os dados recém enviados
             self.seq_no += len(payload)
