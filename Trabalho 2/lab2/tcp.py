@@ -83,7 +83,7 @@ class Conexao:
         self.timeoutInterval = 1
         self.devRTT = None
         self.estimatedRTT = None
-
+        self.fila_envio = []
 
     def _timer(self):
         if self.pacotes_sem_ack:
@@ -91,6 +91,21 @@ class Conexao:
             # Reenviando pacote
             self.servidor.rede.enviar(segmento, dst_addr)
             self.pacotes_sem_ack[0][3] = None
+
+    def _atualizar_timeout_interval(self):
+        _, _, _, sampleRTT = self.pacotes_sem_ack[0]
+        if sampleRTT is None:
+            return
+
+        sampleRTT = round(time(), 5) - sampleRTT
+        if self.estimatedRTT is None:
+            self.estimatedRTT = sampleRTT
+            self.devRTT = sampleRTT/2
+        else:
+            self.estimatedRTT = 0.875*self.estimatedRTT + 0.125*sampleRTT
+            self.devRTT = 0.75*self.devRTT + 0.25 * abs(sampleRTT-self.estimatedRTT)
+
+        self.timeoutInterval = self.estimatedRTT + 4*self.devRTT
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         print('recebido payload: %r' % payload)
@@ -104,7 +119,7 @@ class Conexao:
         if (flags & FLAGS_ACK) == FLAGS_ACK and ack_no > self.seq_no_base:
             self.seq_no_base = ack_no
             if self.pacotes_sem_ack:
-                self.atualizar_timeout_interval()
+                self._atualizar_timeout_interval()
                 self.timer.cancel()
                 self.pacotes_sem_ack.pop(0)
                 if self.pacotes_sem_ack:
@@ -175,18 +190,3 @@ class Conexao:
 
         self.servidor.rede.enviar(segmento_checksum_corrigido, dst_addr)
         self.servidor._fechar_conexao(self.id_conexao)
-
-    def atualizar_timeout_interval(self):
-        _, _, _, sampleRTT = self.pacotes_sem_ack[0]
-        if sampleRTT is None:
-            return
-
-        sampleRTT = round(time(), 5) - sampleRTT
-        if self.estimatedRTT is None:
-            self.estimatedRTT = sampleRTT
-            self.devRTT = sampleRTT/2
-        else:
-            self.estimatedRTT = 0.875*self.estimatedRTT + 0.125*sampleRTT
-            self.devRTT = 0.75*self.devRTT + 0.25 * abs(sampleRTT-self.estimatedRTT)
-
-        self.timeoutInterval = self.estimatedRTT + 4*self.devRTT
