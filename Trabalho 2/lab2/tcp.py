@@ -1,4 +1,5 @@
 import asyncio
+from time import time
 from tcputils import *
 from random import randint
 
@@ -79,14 +80,17 @@ class Conexao:
         self.timer = None
         self.seq_no_base = None
         self.pacotes_sem_ack = []
+        self.TimeoutInterval = 1
+        self.DevRTT = None
+        self.EstimatedRTT = None
 
 
     def _timer(self):
         if self.pacotes_sem_ack:
-            segmento, _, dst_addr = self.pacotes_sem_ack[0]
+            segmento, _, dst_addr, _ = self.pacotes_sem_ack[0]
             # Reenviando pacote
             self.servidor.rede.enviar(segmento, dst_addr)
-
+            self.pacotes_sem_ack[0][3] = None
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         print('recebido payload: %r' % payload)
@@ -100,10 +104,11 @@ class Conexao:
         if (flags & FLAGS_ACK) == FLAGS_ACK and ack_no > self.seq_no_base:
             self.seq_no_base = ack_no
             if self.pacotes_sem_ack:
+                self.atualizar_timeout_interval()
                 self.timer.cancel()
                 self.pacotes_sem_ack.pop(0)
                 if self.pacotes_sem_ack:
-                    self.timer = asyncio.get_event_loop().call_later(1, self._timer)
+                    self.timer = asyncio.get_event_loop().call_later(self.TimeoutInterval, self._timer)
 
         # Se for um pedido de encerrar a conexão
         if (flags & FLAGS_FIN) == FLAGS_FIN:
@@ -152,8 +157,8 @@ class Conexao:
             segmento_checksum_corrigido = fix_checksum(segmento+payload, src_addr, dst_addr)
             self.servidor.rede.enviar(segmento_checksum_corrigido, dst_addr)
 
-            self.timer = asyncio.get_event_loop().call_later(1, self._timer)
-            self.pacotes_sem_ack.append( (segmento_checksum_corrigido, len(payload), dst_addr) )
+            self.timer = asyncio.get_event_loop().call_later(self.TimeoutInterval, self._timer)
+            self.pacotes_sem_ack.append( [segmento_checksum_corrigido, len(payload), dst_addr, round(time(), 5)] )
 
             # Atualizando seq_no com os dados recém enviados
             self.seq_no += len(payload)
@@ -170,3 +175,18 @@ class Conexao:
 
         self.servidor.rede.enviar(segmento_checksum_corrigido, dst_addr)
         self.servidor._fechar_conexao(self.id_conexao)
+
+    def atualizar_timeout_interval(self):
+        _, _, _, SampleRTT = self.pacotes_sem_ack[0]
+        if SampleRTT is None:
+            return
+
+        SampleRTT = round(time(), 5) - SampleRTT
+        if self.EstimatedRTT is None:
+            self.EstimatedRTT = SampleRTT
+            self.DevRTT = SampleRTT/2
+        else:
+            self.EstimatedRTT = 0.875*self.EstimatedRTT + 0.125*SampleRTT
+            self.DevRTT = 0.75*self.DevRTT + 0.25 * abs(SampleRTT-self.EstimatedRTT)
+
+        self.TimeoutInterval = self.EstimatedRTT + 4*self.DevRTT
