@@ -80,9 +80,9 @@ class Conexao:
         self.timer = None
         self.seq_no_base = None
         self.pacotes_sem_ack = []
-        self.TimeoutInterval = 1
-        self.DevRTT = None
-        self.EstimatedRTT = None
+        self.timeoutInterval = 1
+        self.devRTT = None
+        self.estimatedRTT = None
 
 
     def _timer(self):
@@ -108,7 +108,7 @@ class Conexao:
                 self.timer.cancel()
                 self.pacotes_sem_ack.pop(0)
                 if self.pacotes_sem_ack:
-                    self.timer = asyncio.get_event_loop().call_later(self.TimeoutInterval, self._timer)
+                    self.timer = asyncio.get_event_loop().call_later(self.timeoutInterval, self._timer)
 
         # Se for um pedido de encerrar a conexão
         if (flags & FLAGS_FIN) == FLAGS_FIN:
@@ -157,7 +157,7 @@ class Conexao:
             segmento_checksum_corrigido = fix_checksum(segmento+payload, src_addr, dst_addr)
             self.servidor.rede.enviar(segmento_checksum_corrigido, dst_addr)
 
-            self.timer = asyncio.get_event_loop().call_later(self.TimeoutInterval, self._timer)
+            self.timer = asyncio.get_event_loop().call_later(self.timeoutInterval, self._timer)
             self.pacotes_sem_ack.append( [segmento_checksum_corrigido, len(payload), dst_addr, round(time(), 5)] )
 
             # Atualizando seq_no com os dados recém enviados
@@ -177,16 +177,16 @@ class Conexao:
         self.servidor._fechar_conexao(self.id_conexao)
 
     def atualizar_timeout_interval(self):
-        _, _, _, SampleRTT = self.pacotes_sem_ack[0]
-        if SampleRTT is None:
+        _, _, _, sampleRTT = self.pacotes_sem_ack[0]
+        if sampleRTT is None:
             return
 
-        SampleRTT = round(time(), 5) - SampleRTT
-        if self.EstimatedRTT is None:
-            self.EstimatedRTT = SampleRTT
-            self.DevRTT = SampleRTT/2
+        sampleRTT = round(time(), 5) - sampleRTT
+        if self.estimatedRTT is None:
+            self.estimatedRTT = sampleRTT
+            self.devRTT = sampleRTT/2
         else:
-            self.EstimatedRTT = 0.875*self.EstimatedRTT + 0.125*SampleRTT
-            self.DevRTT = 0.75*self.DevRTT + 0.25 * abs(SampleRTT-self.EstimatedRTT)
+            self.estimatedRTT = 0.875*self.estimatedRTT + 0.125*sampleRTT
+            self.devRTT = 0.75*self.devRTT + 0.25 * abs(sampleRTT-self.estimatedRTT)
 
-        self.TimeoutInterval = self.EstimatedRTT + 4*self.DevRTT
+        self.timeoutInterval = self.estimatedRTT + 4*self.devRTT
