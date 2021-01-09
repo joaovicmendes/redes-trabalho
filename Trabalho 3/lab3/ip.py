@@ -13,6 +13,7 @@ class IP:
         self.enlace.registrar_recebedor(self.__raw_recv)
         self.ignore_checksum = self.enlace.ignore_checksum
         self.meu_endereco = None
+        self.tabela = []
 
     def __raw_recv(self, datagrama):
         dscp, ecn, identification, flags, frag_offset, ttl, proto, \
@@ -28,10 +29,24 @@ class IP:
             self.enlace.enviar(datagrama, next_hop)
 
     def _next_hop(self, dest_addr):
-        # TODO: Use a tabela de encaminhamento para determinar o próximo salto
-        # (next_hop) a partir do endereço de destino do datagrama (dest_addr).
-        # Retorne o next_hop para o dest_addr fornecido.
-        pass
+        for cidr, next_hop in self.tabela:
+            if self._addr_match(cidr, dest_addr):
+                return next_hop
+        return None
+
+    def _addr_match(self, cidr, addr):
+        # Recortando os valores
+        cidr_base, no_matching_bits = cidr.split("/", 1)
+
+        # Convertendo para inteiros e string de bits
+        no_matching_bits = int(no_matching_bits)
+        cidr_base = addr2bitstring(cidr_base)
+        addr = addr2bitstring(addr)
+
+        if (cidr_base[:no_matching_bits] == addr[:no_matching_bits]):
+            return True
+        else:
+            return False
 
     def definir_endereco_host(self, meu_endereco):
         """
@@ -49,9 +64,7 @@ class IP:
         Onde os CIDR são fornecidos no formato 'x.y.z.w/n', e os
         next_hop são fornecidos no formato 'x.y.z.w'.
         """
-        # TODO: Guarde a tabela de encaminhamento. Se julgar conveniente,
-        # converta-a em uma estrutura de dados mais eficiente.
-        pass
+        self.tabela = tabela
 
     def registrar_recebedor(self, callback):
         """
@@ -68,3 +81,12 @@ class IP:
         # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
         # datagrama com o cabeçalho IP, contendo como payload o segmento.
         self.enlace.enviar(datagrama, next_hop)
+
+def addr2bitstring(addr):
+    arr = list(int(x) for x in addr.split('.'))
+    string = ""
+
+    for element in arr:
+        string += '{0:08b}'.format(element)
+
+    return string
