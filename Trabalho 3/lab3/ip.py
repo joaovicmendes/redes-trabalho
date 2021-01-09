@@ -29,10 +29,15 @@ class IP:
             self.enlace.enviar(datagrama, next_hop)
 
     def _next_hop(self, dest_addr):
+        prev_matched = {'bits': -1, 'next_hop': None} # [no_matched_bits, next_hop]
+
         for cidr, next_hop in self.tabela:
-            if self._addr_match(cidr, dest_addr):
-                return next_hop
-        return None
+            no_matched_bits = self._addr_match(cidr, dest_addr)
+            if no_matched_bits > prev_matched['bits']:
+                prev_matched['bits'] = no_matched_bits
+                prev_matched['next_hop'] = next_hop
+
+        return prev_matched['next_hop']
 
     def _addr_match(self, cidr, addr):
         # Recortando os valores
@@ -44,9 +49,9 @@ class IP:
         addr = addr2bitstring(addr)
 
         if (cidr_base[:no_matching_bits] == addr[:no_matching_bits]):
-            return True
+            return no_matching_bits
         else:
-            return False
+            return -1
 
     def definir_endereco_host(self, meu_endereco):
         """
