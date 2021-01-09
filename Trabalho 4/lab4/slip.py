@@ -43,6 +43,7 @@ class Enlace:
     def __init__(self, linha_serial):
         self.linha_serial = linha_serial
         self.linha_serial.registrar_recebedor(self.__raw_recv)
+        self.dados_residuais = ""
 
     def registrar_recebedor(self, callback):
         self.callback = callback
@@ -63,11 +64,16 @@ class Enlace:
         self.linha_serial.enviar(dados)
 
     def __raw_recv(self, dados):
-        # TODO: Preencha aqui com o código para receber dados da linha serial.
-        # Trate corretamente as sequências de escape. Quando ler um quadro
-        # completo, repasse o datagrama contido nesse quadro para a camada
-        # superior chamando self.callback. Cuidado pois o argumento dados pode
-        # vir quebrado de várias formas diferentes - por exemplo, podem vir
-        # apenas pedaços de um quadro, ou um pedaço de quadro seguido de um
-        # pedaço de outro, ou vários quadros de uma vez só.
-        pass
+        # Caso parte do comando tenha vindo antes
+        self.dados_residuais = self.dados_residuais + dados.hex()
+
+        # Enquanto tiver um comando completo nos dados residuais
+        while self.dados_residuais.find("c0") != -1:
+            # Recortando o primeiro comando completo existente
+            payload, _, self.dados_residuais = self.dados_residuais.partition("c0")
+
+            # Ignorando payload vazio
+            if payload == "":
+                continue
+            else:
+                self.callback(bytes.fromhex(payload))
