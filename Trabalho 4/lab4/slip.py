@@ -76,4 +76,21 @@ class Enlace:
             if payload == "":
                 continue
             else:
-                self.callback(bytes.fromhex(payload))
+                # Recuperando caracteres especiais
+                payload_escaped = ""
+                i = 0
+                while i < len(payload)-1:
+                    byte = payload[i:i+2]
+                    if byte == "db":
+                        nxt_byte = payload[i+2:i+4]
+                        if nxt_byte == "dc":
+                            payload_escaped += "c0"
+                        elif nxt_byte == "dd":
+                            payload_escaped += "db"
+                        i += 4
+                    else:
+                        payload_escaped += payload[i:i+2]
+                        i += 2
+
+                # Repassando dados
+                self.callback(bytes.fromhex(payload_escaped))
