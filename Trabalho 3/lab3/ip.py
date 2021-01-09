@@ -78,8 +78,25 @@ class IP:
         (string no formato x.y.z.w).
         """
         next_hop = self._next_hop(dest_addr)
-        # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
-        # datagrama com o cabeçalho IP, contendo como payload o segmento.
+
+        # Construindo cabeçalho IPv4
+        vihl = (4 << 4) | 5
+        dscpecn = 0 | 0
+        total_len = 20 + len(segmento)
+        identification = 0
+        flagsfrag = (0 << 13) | 0
+        ttl = 64
+        proto = IPPROTO_TCP
+
+        hdr = struct.pack('!BBHHHBBH', vihl, dscpecn, total_len, identification, \
+             flagsfrag, ttl, proto, 0) + str2addr(self.meu_endereco) + str2addr(dest_addr)
+
+        # Corrigindo checksum
+        checksum = calc_checksum(hdr)
+        hdr = struct.pack('!BBHHHBBH', vihl, dscpecn, total_len, identification, \
+             flagsfrag, ttl, proto, checksum) + str2addr(self.meu_endereco) + str2addr(dest_addr)
+        
+        datagrama = hdr + segmento
         self.enlace.enviar(datagrama, next_hop)
 
 def addr2bitstring(addr):
