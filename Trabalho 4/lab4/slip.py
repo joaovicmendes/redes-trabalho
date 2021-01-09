@@ -48,10 +48,19 @@ class Enlace:
         self.callback = callback
 
     def enviar(self, datagrama):
-        # TODO: Preencha aqui com o código para enviar o datagrama pela linha
-        # serial, fazendo corretamente a delimitação de quadros e o escape de
-        # sequências especiais, de acordo com o protocolo CamadaEnlace (RFC 1055).
-        pass
+        datagrama_escaped = b''
+
+        # Escapando bytes '0xc0' e '0xdb'
+        for byte in list(datagrama):
+            if byte == 0xc0:
+                datagrama_escaped = datagrama_escaped + bytes([0xdb, 0xdc])
+            elif byte == 0xdb:
+                datagrama_escaped = datagrama_escaped + bytes([0xdb, 0xdd])
+            else:
+                datagrama_escaped = datagrama_escaped + bytes([byte])
+
+        dados = bytes([0xc0]) + datagrama_escaped + bytes([0xc0])
+        self.linha_serial.enviar(dados)
 
     def __raw_recv(self, dados):
         # TODO: Preencha aqui com o código para receber dados da linha serial.
