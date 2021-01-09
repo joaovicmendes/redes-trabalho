@@ -25,7 +25,28 @@ class IP:
         else:
             # atua como roteador
             next_hop = self._next_hop(dst_addr)
-            # TODO: Trate corretamente o campo TTL do datagrama
+
+            # Recuperando cabeçalho para decrementar TTL
+            dscp, ecn, identification, flags, frag_offset, ttl, proto, src_addr, \
+                dst_addr, payload = read_ipv4_header(datagrama)
+        
+            if ttl == 1:
+                return # Descartando datagrama
+            else:
+                ttl -= 1
+
+            # Refazendo cabeçalho com ttl decrementado
+            hdr = struct.pack('!BBHHHBBH', 0x45, dscp|ecn, 20+len(payload), identification, \
+             (flags<<13)|frag_offset, ttl, proto, 0) + str2addr(src_addr) + str2addr(dst_addr)
+
+            # Corrigindo checksum
+            checksum = calc_checksum(hdr)
+
+            hdr = struct.pack('!BBHHHBBH', 0x45, dscp|ecn, 20+len(payload), identification, \
+             (flags<<13)|frag_offset, ttl, proto, checksum) + str2addr(src_addr) + str2addr(dst_addr)
+
+            datagrama = hdr + payload
+
             self.enlace.enviar(datagrama, next_hop)
 
     def _next_hop(self, dest_addr):
