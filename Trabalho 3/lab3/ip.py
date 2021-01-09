@@ -31,6 +31,7 @@ class IP:
                 dst_addr, payload = read_ipv4_header(datagrama)
         
             if ttl == 1:
+                self._icmp_time_limit_exceeded(datagrama, src_addr)
                 return # Descartando datagrama
             else:
                 ttl -= 1
@@ -74,6 +75,13 @@ class IP:
         else:
             return -1
 
+    def _icmp_time_limit_exceeded(self, datagrama, dst_addr):
+        payload = struct.pack('!BBHI', 11, 0, 0, 0) + datagrama[:28]
+        checksum = calc_checksum(payload)
+        payload = struct.pack('!BBHI', 11, 0, checksum, 0) + datagrama[:28]
+
+        self.enviar(payload, dst_addr, IPPROTO_ICMP)
+
     def definir_endereco_host(self, meu_endereco):
         """
         Define qual o endereço IPv4 (string no formato x.y.z.w) deste host.
@@ -98,7 +106,7 @@ class IP:
         """
         self.callback = callback
 
-    def enviar(self, segmento, dest_addr):
+    def enviar(self, segmento, dest_addr, proto=IPPROTO_TCP):
         """
         Envia segmento para dest_addr, onde dest_addr é um endereço IPv4
         (string no formato x.y.z.w).
@@ -112,7 +120,6 @@ class IP:
         identification = 0
         flagsfrag = (0 << 13) | 0
         ttl = 64
-        proto = IPPROTO_TCP
 
         hdr = struct.pack('!BBHHHBBH', vihl, dscpecn, total_len, identification, \
              flagsfrag, ttl, proto, 0) + str2addr(self.meu_endereco) + str2addr(dest_addr)
