@@ -1,3 +1,10 @@
+# Universidade Federal de São Carlos – UFSCar
+# Departamento de Computação
+# 1001504 - Redes de Computadores – Trabalho 2
+# Prof. Dr. Paulo Matias
+# Alunos: João Victor Mendes Freire, 758943
+#         Julia Cinel Chagas, 759314
+
 import asyncio
 from time import time
 from tcputils import *

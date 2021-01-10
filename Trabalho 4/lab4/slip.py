@@ -1,3 +1,10 @@
+# Universidade Federal de São Carlos – UFSCar
+# Departamento de Computação
+# 1001504 - Redes de Computadores – Trabalho 4
+# Prof. Dr. Paulo Matias
+# Aluno: João Victor Mendes Freire
+# RA: 758943
+
 class CamadaEnlace:
     ignore_checksum = False
 
