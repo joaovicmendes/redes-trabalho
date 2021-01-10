@@ -93,4 +93,9 @@ class Enlace:
                         i += 2
 
                 # Repassando dados
-                self.callback(bytes.fromhex(payload_escaped))
+                try:
+                    self.callback(bytes.fromhex(payload_escaped))
+                except:
+                    # ignora a exceção, mas mostra na tela
+                    import traceback
+                    traceback.print_exc()
